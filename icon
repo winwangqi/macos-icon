@@ -1,0 +1,145 @@
+#!/bin/bash
+
+# 检查输入参数
+if [ -z "$1" ]; then
+  echo "请提供一个图片文件或应用程序的路径。"
+  exit 1
+fi
+
+input_path="$1"
+output_dir="output"
+processed_png="${output_dir}/processed_icon.png"
+icns_output_file="${output_dir}/icon.icns"
+
+# 检查 ImageMagick 是否安装
+if ! command -v magick &> /dev/null
+then
+  echo "ImageMagick 未安装，正在安装..."
+  if ! command -v brew &> /dev/null
+  then
+    echo "Homebrew 未安装，请先安装 Homebrew。"
+    exit 1
+  else
+    brew install imagemagick
+  fi
+fi
+
+# 检查 sips 是否安装
+if ! command -v sips &> /dev/null
+then
+  echo "sips 未安装，请确保 macOS 系统完整。"
+  exit 1
+fi
+
+# 创建输出目录
+if [ -d "$output_dir" ]; then
+    rm -rf "$output_dir"
+    echo "$output_dir 被删除了"
+else
+    echo "$output_dir 不存在"
+fi
+mkdir -p $output_dir
+
+# 确保输出目录具有写权限
+chmod +w $output_dir
+
+process_image() {
+  local image_path="$1"
+  local output_path="$2"
+  local icns_output="$3"
+
+  # 转换为 PNG 格式并调整尺寸为 1024x1024
+  echo "调整图像尺寸为 1024x1024..."
+  magick "$image_path" -resize 1024x1024 "$output_path"
+
+  # 添加圆角
+  echo "添加圆角..."
+  magick "$output_path" \
+    \( +clone -alpha extract -draw "fill black polygon 0,0 0,180 180,0 fill white circle 180,180 180,0" \
+    \( +clone -flip \) -compose Multiply -composite \
+    \( +clone -flop \) -compose Multiply -composite \
+    \) -alpha off -compose CopyOpacity -composite "$output_path"
+
+  # 添加内边距
+  echo "添加内边距..."
+  local padding=84
+  magick "$output_path" -background none -gravity center -extent $((1024 + 2 * padding))x$((1024 + 2 * padding)) "$output_path"
+
+  # 添加阴影
+  echo "添加阴影..."
+  magick "$output_path" \
+    \( +clone -background black -shadow 80x3+10+10 \) +swap -background none -layers merge +repage "$output_path"
+
+  # 创建 ICNS 图标
+  echo "创建 ICNS 图标..."
+  mkdir -p $output_dir/icon.iconset
+  sips -z 16 16     "$output_path" --out $output_dir/icon.iconset/icon_16x16.png
+  sips -z 32 32     "$output_path" --out $output_dir/icon.iconset/icon_16x16@2x.png
+  sips -z 32 32     "$output_path" --out $output_dir/icon.iconset/icon_32x32.png
+  sips -z 64 64     "$output_path" --out $output_dir/icon.iconset/icon_32x32@2x.png
+  sips -z 128 128   "$output_path" --out $output_dir/icon.iconset/icon_128x128.png
+  sips -z 256 256   "$output_path" --out $output_dir/icon.iconset/icon_128x128@2x.png
+  sips -z 256 256   "$output_path" --out $output_dir/icon.iconset/icon_256x256.png
+  sips -z 512 512   "$output_path" --out $output_dir/icon.iconset/icon_256x256@2x.png
+  sips -z 512 512   "$output_path" --out $output_dir/icon.iconset/icon_512x512.png
+  cp "$output_path" $output_dir/icon.iconset/icon_512x512@2x.png
+  iconutil -c icns $output_dir/icon.iconset -o "$icns_output"
+}
+
+find_best_icon() {
+  local iconset_dir="$1"
+  local icons=("icon_512x512@2x.png" "icon_512x512.png" "icon_256x256@2x.png" "icon_256x256.png")
+  for icon in "${icons[@]}"; do
+    if [ -f "$iconset_dir/$icon" ]; then
+      echo "$iconset_dir/$icon"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# 检查输入路径是图片还是应用程序
+if [[ "$input_path" == *.app ]]; then
+  # 处理应用程序路径（完美版本2）
+  echo "处理应用程序路径..."
+  
+  # 找到应用程序的 ICNS 文件
+  icns_file_path=$(find "$input_path/Contents/Resources" -name "*.icns" | head -n 1)
+  if [ -z "$icns_file_path" ]; then
+    echo "未找到 ICNS 文件。"
+    exit 1
+  fi
+
+  # 解压缩 ICNS 文件
+  echo "解压缩 ICNS 文件..."
+  iconutil -c iconset "$icns_file_path" -o $output_dir/icon.iconset
+
+  # 保存解压后的原始图标
+  echo "保存原始图标..."
+  mkdir -p $output_dir/original_icons
+  cp -r $output_dir/icon.iconset/* $output_dir/original_icons/
+
+  # 查找最佳质量的 PNG 图像
+  best_icon=$(find_best_icon "$output_dir/icon.iconset")
+  if [ -z "$best_icon" ]; then
+    echo "未找到高质量的 PNG 图像。"
+    exit 1
+  fi
+
+  # 导出 1024x1024 PNG 图像
+  echo "导出 1024x1024 PNG 图像..."
+  sips -z 1024 1024 "$best_icon" --out "$processed_png"
+
+  # 使用完美版本1处理 PNG 图像并创建 ICNS 文件
+  process_image "$processed_png" "$processed_png" "$icns_output_file"
+
+  # 移动 ICNS 文件和处理后的 PNG 文件到输出目录
+  mv "$icns_output_file" "$output_dir"
+
+else
+  # 处理图片路径（完美版本1）
+  echo "处理图片路径..."
+  process_image "$input_path" "$processed_png" "$icns_output_file"
+fi
+
+echo "处理完成，结果保存在 $output_dir"
