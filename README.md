@@ -7,11 +7,18 @@
 4. 将处理后的 PNG 图像重新打包成 ICNS 文件。
 5. 保存原始的解压缩图标文件。
 6. 将处理后的 PNG 图像和新的 ICNS 文件输出到指定目录。
+7. 用户可通过参数控制是否添加内边距、圆角和阴影。
 
 ## 功能概述
 
 - **处理图片文件**：直接对输入的 PNG 图片文件进行处理。
 - **处理应用程序图标**：读取应用程序包中的 ICNS 文件，解压缩并找到最佳质量的图标进行处理。
+
+## 参数说明
+
+- `--no-padding`：不添加内边距。
+- `--no-round-corners`：不添加圆角。
+- `--no-shadow`：不添加阴影。
 
 ## 使用方法
 
@@ -33,15 +40,21 @@
 
    - **处理图片文件**：
      ```bash
-     ./icon /path/to/your/image.png
+     ./icon /path/to/your/image.png [--no-padding] [--no-round-corners] [--no-shadow]
      ```
-     该命令会对提供的 PNG 图片文件进行处理，并生成新的 ICNS 文件和处理后的 PNG 文件。
+     例如：
+     ```bash
+     ./icon /path/to/your/image.png --no-padding --no-shadow
+     ```
 
    - **处理应用程序图标**：
      ```bash
-     ./icon /path/to/your/app.app
+     ./icon /path/to/your/app.app [--no-padding] [--no-round-corners] [--no-shadow]
      ```
-     该命令会读取应用程序包中的 ICNS 文件，解压缩并找到最佳质量的图标进行处理，并生成新的 ICNS 文件和处理后的 PNG 文件，同时保留解压缩后的原始图标。
+     例如：
+     ```bash
+     ./icon /path/to/your/app.app --no-round-corners
+     ```
 
 ## 处理步骤
 
@@ -71,12 +84,12 @@
 
 - **处理图片文件**：
   ```bash
-  ./icon /path/to/your/image.png
+  ./icon /path/to/your/image.png --no-padding --no-round-corners --no-shadow
   ```
 
 - **处理应用程序图标**：
   ```bash
-  ./icon /path/to/your/app.app
+  ./icon /path/to/your/app.app --no-padding --no-round-corners --no-shadow
   ```
 
 ## 注意事项

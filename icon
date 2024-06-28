@@ -6,17 +6,30 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-input_path="$1"
+# 默认设置
+add_padding=true
+add_round_corners=true
+add_shadow=true
+
+# 解析参数
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --no-padding) add_padding=false ;;
+        --no-round-corners) add_round_corners=false ;;
+        --no-shadow) add_shadow=false ;;
+        *) input_path="$1" ;;
+    esac
+    shift
+done
+
 output_dir="output"
 processed_png="${output_dir}/processed_icon.png"
 icns_output_file="${output_dir}/icon.icns"
 
 # 检查 ImageMagick 是否安装
-if ! command -v magick &> /dev/null
-then
+if ! command -v magick &> /dev/null; then
   echo "ImageMagick 未安装，正在安装..."
-  if ! command -v brew &> /dev/null
-  then
+  if ! command -v brew &> /dev/null; then
     echo "Homebrew 未安装，请先安装 Homebrew。"
     exit 1
   else
@@ -25,18 +38,17 @@ then
 fi
 
 # 检查 sips 是否安装
-if ! command -v sips &> /dev/null
-then
+if ! command -v sips &> /dev/null; then
   echo "sips 未安装，请确保 macOS 系统完整。"
   exit 1
 fi
 
 # 创建输出目录
 if [ -d "$output_dir" ]; then
-    rm -rf "$output_dir"
-    echo "$output_dir 被删除了"
+  rm -rf "$output_dir"
+  echo "$output_dir 被删除了"
 else
-    echo "$output_dir 不存在"
+  echo "$output_dir 不存在"
 fi
 mkdir -p $output_dir
 
@@ -53,22 +65,28 @@ process_image() {
   magick "$image_path" -resize 1024x1024 "$output_path"
 
   # 添加圆角
-  echo "添加圆角..."
-  magick "$output_path" \
-    \( +clone -alpha extract -draw "fill black polygon 0,0 0,180 180,0 fill white circle 180,180 180,0" \
-    \( +clone -flip \) -compose Multiply -composite \
-    \( +clone -flop \) -compose Multiply -composite \
-    \) -alpha off -compose CopyOpacity -composite "$output_path"
+  if $add_round_corners; then
+    echo "添加圆角..."
+    magick "$output_path" \
+      \( +clone -alpha extract -draw "fill black polygon 0,0 0,180 180,0 fill white circle 180,180 180,0" \
+      \( +clone -flip \) -compose Multiply -composite \
+      \( +clone -flop \) -compose Multiply -composite \
+      \) -alpha off -compose CopyOpacity -composite "$output_path"
+  fi
 
   # 添加内边距
-  echo "添加内边距..."
-  local padding=84
-  magick "$output_path" -background none -gravity center -extent $((1024 + 2 * padding))x$((1024 + 2 * padding)) "$output_path"
+  if $add_padding; then
+    echo "添加内边距..."
+    local padding=84
+    magick "$output_path" -background none -gravity center -extent $((1024 + 2 * padding))x$((1024 + 2 * padding)) "$output_path"
+  fi
 
   # 添加阴影
-  echo "添加阴影..."
-  magick "$output_path" \
-    \( +clone -background black -shadow 80x3+10+10 \) +swap -background none -layers merge +repage "$output_path"
+  if $add_shadow; then
+    echo "添加阴影..."
+    magick "$output_path" \
+      \( +clone -background black -shadow 80x3+10+10 \) +swap -background none -layers merge +repage "$output_path"
+  fi
 
   # 创建 ICNS 图标
   echo "创建 ICNS 图标..."
@@ -100,7 +118,7 @@ find_best_icon() {
 
 # 检查输入路径是图片还是应用程序
 if [[ "$input_path" == *.app ]]; then
-  # 处理应用程序路径（完美版本2）
+  # 处理应用程序路径
   echo "处理应用程序路径..."
   
   # 找到应用程序的 ICNS 文件
@@ -130,14 +148,14 @@ if [[ "$input_path" == *.app ]]; then
   echo "导出 1024x1024 PNG 图像..."
   sips -z 1024 1024 "$best_icon" --out "$processed_png"
 
-  # 使用完美版本1处理 PNG 图像并创建 ICNS 文件
+  # 处理 PNG 图像并创建 ICNS 文件
   process_image "$processed_png" "$processed_png" "$icns_output_file"
 
   # 移动 ICNS 文件和处理后的 PNG 文件到输出目录
   mv "$icns_output_file" "$output_dir"
 
 else
-  # 处理图片路径（完美版本1）
+  # 处理图片路径
   echo "处理图片路径..."
   process_image "$input_path" "$processed_png" "$icns_output_file"
 fi
